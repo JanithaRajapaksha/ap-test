@@ -11,7 +11,7 @@ from urllib.parse import urlparse
 
 from datetime import datetime, timezone, timedelta
 from dateutil import parser  # Install if needed: pip install python-dateutil on your Pi
-from PIL import Image
+# from PIL import Image
 
 import runpy
 from pathlib import Path
