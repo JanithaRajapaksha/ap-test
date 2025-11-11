@@ -4,8 +4,8 @@ import os, sys, time, signal, subprocess, shutil, pathlib, re, threading, socket
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
 
-from PIL import Image
-import mimetypes
+# from PIL import Image
+# import mimetypes
 from urllib.parse import urlparse
 
 
@@ -1016,14 +1016,14 @@ def connectivity_ok() -> bool:
 
 # ---------- bellow for image lode ---------------------------------------------------------
 
-# ---------- Image helpers (display + download + QR) ----------
-import os, time, mimetypes, urllib.parse
-from PIL import Image, ImageDraw, ImageFont
+# # ---------- Image helpers (display + download + QR) ----------
+# import os, time, mimetypes, urllib.parse
+# from PIL import Image, ImageDraw, ImageFont
 
-# Make sure Waveshare driver path is available (same style as Waveshare examples)
-libdir = os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), 'lib')
-if os.path.exists(libdir):
-    sys.path.append(libdir)
+# # Make sure Waveshare driver path is available (same style as Waveshare examples)
+# libdir = os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), 'lib')
+# if os.path.exists(libdir):
+#     sys.path.append(libdir)
 
 # import epd13in3E
 
