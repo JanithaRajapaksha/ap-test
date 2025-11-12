@@ -152,7 +152,7 @@ address=/#/{captive_ip}
 """)
 
 def start_open_ap(
-    ssid="EpaperConfig",
+    ssid="RoverAP",
     country="LK",
     iface=None,
     ip_cidr="192.168.4.1/24",
