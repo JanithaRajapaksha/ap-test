@@ -1,171 +1,4 @@
 #!/usr/bin/env python3
-"""
-Minimal AP-only script.
-Brings up an open Wi-Fi AP using hostapd + dnsmasq with sensible defaults.
-Run as root (sudo). Script keeps running until interrupted (SIGINT/SIGTERM),
-then stops the AP cleanly.
-"""
-import os
-import sys
-import time
-import signal
-import subprocess
-import shutil
-from pathlib import Path
-
-RUN = Path("/run")
-HOSTAPD_CONF = RUN / "simple_hostapd.conf"
-HOSTAPD_PID = RUN / "simple_hostapd.pid"
-HOSTAPD_LOG = RUN / "simple_hostapd.log"
-DNSMASQ_CONF = RUN / "simple_dnsmasq.conf"
-DNSMASQ_PID = RUN / "simple_dnsmasq.pid"
-
-DEFAULT_IFACE_CANDIDATES = ("wlan0", "wlp2s0", "wlp3s0", "wifi0")
-
-
-def _which(name):
-    return shutil.which(name) is not None
-
-
-def detect_iface():
-    for cand in DEFAULT_IFACE_CANDIDATES:
-        try:
-            rc = subprocess.run(["ip", "link", "show", cand], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode
-            if rc == 0:
-                return cand
-        except Exception:
-            continue
-    return None
-
-
-def write_hostapd(ifname, ssid, country, channel):
-    HOSTAPD_CONF.write_text(f"""interface={ifname}
-driver=nl80211
-ssid={ssid}
-country_code={country}
-hw_mode=g
-channel={channel}
-ieee80211n=1
-wmm_enabled=1
-auth_algs=1
-wpa=0
-ignore_broadcast_ssid=0
-""")
-
-
-def write_dnsmasq(ifname, dhcp_start, dhcp_end, captive_ip="192.168.4.1"):
-    DNSMASQ_CONF.write_text(f"""interface={ifname}
-bind-interfaces
-dhcp-range={dhcp_start},{dhcp_end},255.255.255.0,12h
-dhcp-option=3,{captive_ip}
-dhcp-option=6,{captive_ip}
-address=/#/{captive_ip}
-""")
-
-
-def start_ap(ssid="MyAP", iface=None, country="US", ip_cidr="192.168.4.1/24", channel=6):
-    if os.geteuid() != 0:
-        print("This script must be run as root.")
-        return False
-
-    for bin_name in ("hostapd", "dnsmasq", "ip", "rfkill", "iw"):
-        if not _which(bin_name):
-            print(f"Required binary not found: {bin_name}")
-            return False
-
-    ifname = iface or detect_iface()
-    if not ifname:
-        print("No Wi-Fi interface detected. Specify one with --iface.")
-        return False
-
-    # Free radio & set region (best-effort)
-    subprocess.run(["rfkill", "unblock", "wifi"], check=False)
-    subprocess.run(["iw", "reg", "set", country], check=False)
-
-    # Stop common conflicts
-    subprocess.run(["systemctl", "stop", "NetworkManager.service"], check=False)
-    subprocess.run(["pkill", "hostapd"], check=False)
-    subprocess.run(["pkill", "dnsmasq"], check=False)
-
-    # Configure interface IP
-    subprocess.run(["ip", "link", "set", ifname, "down"], check=False)
-    subprocess.run(["ip", "addr", "flush", "dev", ifname], check=False)
-    subprocess.run(["ip", "addr", "add", ip_cidr, "dev", ifname], check=False)
-    subprocess.run(["ip", "link", "set", ifname, "up"], check=False)
-
-    write_hostapd(ifname, ssid, country, channel)
-    write_dnsmasq(ifname, "192.168.4.10", "192.168.4.100", captive_ip=ip_cidr.split('/')[0])
-
-    subprocess.run(["rm", "-f", str(HOSTAPD_PID), str(HOSTAPD_LOG)], check=False)
-    rc = subprocess.run(["hostapd", "-B", "-P", str(HOSTAPD_PID), "-f", str(HOSTAPD_LOG), str(HOSTAPD_CONF)]).returncode
-    time.sleep(1)
-    if rc != 0 or not HOSTAPD_PID.exists():
-        print("hostapd failed to start")
-        return False
-
-    subprocess.run(["rm", "-f", str(DNSMASQ_PID)], check=False)
-    rc2 = subprocess.run(["dnsmasq", "-C", str(DNSMASQ_CONF), "-x", str(DNSMASQ_PID)]).returncode
-    time.sleep(0.5)
-    if rc2 != 0 or not DNSMASQ_PID.exists():
-        print("dnsmasq failed to start")
-        subprocess.run(["pkill", "hostapd"], check=False)
-        return False
-
-    print(f"AP '{ssid}' started on {ifname} — IP {ip_cidr.split('/')[0]}")
-    return True
-
-
-def stop_ap(iface_hint="wlan0"):
-    for pf in (HOSTAPD_PID, DNSMASQ_PID):
-        try:
-            if pf.exists():
-                pid = pf.read_text().strip()
-                if pid.isdigit():
-                    subprocess.run(["kill", pid], check=False)
-                pf.unlink(missing_ok=True)
-        except Exception:
-            pass
-    subprocess.run(["pkill", "hostapd"], check=False)
-    subprocess.run(["pkill", "dnsmasq"], check=False)
-    subprocess.run(["ip", "addr", "flush", "dev", iface_hint], check=False)
-    subprocess.run(["ip", "link", "set", iface_hint, "down"], check=False)
-    subprocess.run(["ip", "link", "set", iface_hint, "up"], check=False)
-    print("AP stopped")
-
-
-def main():
-    import argparse
-    p = argparse.ArgumentParser(description="Minimal AP-only bringup script")
-    p.add_argument("--ssid", default="MyAP")
-    p.add_argument("--iface", default=None)
-    p.add_argument("--country", default="US")
-    p.add_argument("--channel", type=int, default=6)
-    p.add_argument("--ip", default="192.168.4.1/24")
-    args = p.parse_args()
-
-    ok = start_ap(ssid=args.ssid, iface=args.iface, country=args.country, ip_cidr=args.ip, channel=args.channel)
-    if not ok:
-        return 2
-
-    def _sig(signum, frame):
-        print("Stopping on signal", signum)
-        stop_ap(args.iface or "wlan0")
-        sys.exit(0)
-
-    signal.signal(signal.SIGINT, _sig)
-    signal.signal(signal.SIGTERM, _sig)
-
-    try:
-        while True:
-            time.sleep(1)
-    finally:
-        stop_ap(args.iface or "wlan0")
-
-
-if __name__ == '__main__':
-    sys.exit(main())
-
-#!/usr/bin/env python3
 # 0.4_ap_test.py — Open AP + Captive Portal (quiet NM, no 404 stack traces)
 import os, sys, time, signal, subprocess, shutil, pathlib, re, threading, socket, json, urllib.parse, urllib.request
 from http.server import HTTPServer, BaseHTTPRequestHandler
@@ -209,7 +42,7 @@ REJOIN_EVENT = threading.Event()
 
 # Global AP configuration for recovery
 CURRENT_AP_CONFIG = {
-    'ssid': 'EpaperConfig',
+    'ssid': 'RoverAP',
     'country': 'LK',
     'iface': None,
     'ip_cidr': '192.168.4.1/24',
@@ -1190,7 +1023,7 @@ def main():
         print("Please run with sudo.")
         return 1
 
-    SSID = "RoverAP"
+    SSID = "EpaperConfig"
     COUNTRY = "LK"
     IFACE = None             # auto-detect
     CHANNEL = 6              # falls back to 1/6/11 inside start_open_ap
@@ -1258,13 +1091,13 @@ def main():
         # >>> Increment AP session counter now that AP+portal are up
         AP_START_COUNT += 1
 
-        # # ---- Show QR instructions on the e-paper now that AP+portal are up ----
-        # try:
-        #     host_ip = IP_CIDR.split("/")[0]
-        #     host = host_ip + (f":{HTTPD_PORT}" if HTTPD_PORT and HTTPD_PORT != 80 else "")
-        #     show_ap_qr_on_epaper(SSID, host)
-        # except Exception as e:
-        #     print(f"⚠️ Could not display QR on e-paper: {e}")
+        # ---- Show QR instructions on the e-paper now that AP+portal are up ----
+        try:
+            host_ip = IP_CIDR.split("/")[0]
+            host = host_ip + (f":{HTTPD_PORT}" if HTTPD_PORT and HTTPD_PORT != 80 else "")
+            show_ap_qr_on_epaper(SSID, host)
+        except Exception as e:
+            print(f"⚠️ Could not display QR on e-paper: {e}")
 
         # Graceful shutdown while AP is up
         def _sig(*_):
