@@ -1023,7 +1023,7 @@ def main():
         print("Please run with sudo.")
         return 1
 
-    SSID = "EpaperConfig"
+    SSID = "RoverAP"
     COUNTRY = "LK"
     IFACE = None             # auto-detect
     CHANNEL = 6              # falls back to 1/6/11 inside start_open_ap
