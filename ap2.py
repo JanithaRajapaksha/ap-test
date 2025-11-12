@@ -1103,7 +1103,7 @@ def main():
         # Graceful shutdown while AP is up
         def _sig(*_):
             print("\n[*] Shutting down …")
-            # stop_captive_web_server()
+            stop_captive_web_server()
             stop_open_ap(IFACE or "wlan0")
             _sh(["systemctl","start","NetworkManager"])
             time.sleep(1)
@@ -1113,19 +1113,21 @@ def main():
         signal.signal(signal.SIGINT, _sig)
         signal.signal(signal.SIGTERM, _sig)
 
-        # print("Waiting for Wi-Fi configuration from portal …")
-        # REJOIN_EVENT.clear()
-        # # Block here until the portal thread reports success
-        # while not REJOIN_EVENT.wait(timeout=1):
-        #     pass
+        print("Waiting for Wi-Fi configuration from portal …")
+        REJOIN_EVENT.clear()
+        # Block here until the portal thread reports success
+        while not REJOIN_EVENT.wait(timeout=1):
+            pass
 
-        # print("✓ Portal signaled success — stopping AP and resuming monitoring …")
+        print("✓ Portal signaled success — stopping AP and resuming monitoring …")
         # (connect_to_wifi already stopped AP/server, but stop again just in case)
-        # stop_captive_web_server()
+        stop_captive_web_server()
         stop_open_ap(IFACE or "wlan0")
         REJOIN_EVENT.clear()
         time.sleep(2)  # let NetworkManager settle
-# loop back and resume connectivity monitoring    
+# loop back and resume connectivity monitoring
+
+    
 
 if __name__ == "__main__":
     sys.exit(main())
