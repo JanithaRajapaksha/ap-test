@@ -1082,22 +1082,22 @@ def main():
             time.sleep(5)
             continue
 
-        if not start_captive_web_server():
-            print("✗ Failed to start captive portal web server (retrying in 5s)")
-            stop_open_ap(IFACE or "wlan0")
-            time.sleep(5)
-            continue
+        # if not start_captive_web_server():
+        #     print("✗ Failed to start captive portal web server (retrying in 5s)")
+        #     stop_open_ap(IFACE or "wlan0")
+        #     time.sleep(5)
+        #     continue
 
         # >>> Increment AP session counter now that AP+portal are up
         AP_START_COUNT += 1
 
-        # ---- Show QR instructions on the e-paper now that AP+portal are up ----
-        try:
-            host_ip = IP_CIDR.split("/")[0]
-            host = host_ip + (f":{HTTPD_PORT}" if HTTPD_PORT and HTTPD_PORT != 80 else "")
-            show_ap_qr_on_epaper(SSID, host)
-        except Exception as e:
-            print(f"⚠️ Could not display QR on e-paper: {e}")
+        # # ---- Show QR instructions on the e-paper now that AP+portal are up ----
+        # try:
+        #     host_ip = IP_CIDR.split("/")[0]
+        #     host = host_ip + (f":{HTTPD_PORT}" if HTTPD_PORT and HTTPD_PORT != 80 else "")
+        #     show_ap_qr_on_epaper(SSID, host)
+        # except Exception as e:
+        #     print(f"⚠️ Could not display QR on e-paper: {e}")
 
         # Graceful shutdown while AP is up
         def _sig(*_):
