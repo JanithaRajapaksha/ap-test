@@ -1040,7 +1040,8 @@ def main():
         while True:
             ok = wifi_is_connected() and test_internet_connectivity(timeout=5)
             if ok:
-                print("wifi and internet is ok ")
+                print("wifi and internet is ok. Closing NetworkManager.")
+                _sh(["systemctl","stop","NetworkManager"])
                 # --- AWS IoT cert check & one-time registration ---
                 # ensure_aws_iot_certs_once()
                 # --------------------------------------------------
@@ -1104,6 +1105,7 @@ def main():
             print("\n[*] Shutting down …")
             stop_captive_web_server()
             stop_open_ap(IFACE or "wlan0")
+            _sh(["systemctl","start","NetworkManager"])
             sys.exit(0)
 
         signal.signal(signal.SIGINT, _sig)
