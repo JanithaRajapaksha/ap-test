@@ -1029,7 +1029,7 @@ def main():
     CHANNEL = 6              # falls back to 1/6/11 inside start_open_ap
     IP_CIDR = "192.168.4.1/24"
 
-    CHECK_INTERVAL = 5       # seconds between connectivity checks
+    CHECK_INTERVAL = 2       # seconds between connectivity checks
     FAIL_THRESHOLD = 2       # consecutive failures before failover
 
     global AP_START_COUNT, LAST_URL_AP_COUNT, URL_IMAGE
@@ -1106,6 +1106,8 @@ def main():
             stop_captive_web_server()
             stop_open_ap(IFACE or "wlan0")
             _sh(["systemctl","start","NetworkManager"])
+            time.sleep(1)
+            _sh(["rfkill","unblock","wifi"])
             sys.exit(0)
 
         signal.signal(signal.SIGINT, _sig)
